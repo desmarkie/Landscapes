@@ -1,0 +1,19 @@
+{
+	"name": "gulp-coffeescript",
+	"version": "0.0.1",
+	"description": "Basic coffeescript setup. Serves on port 9000",
+	"repository": {
+		"type": "git",
+		"url": "git://github.com/desmarkie/gulp-coffeescript-browserify.git"
+	},
+	"devDependencies": {
+		"gulp": "*",
+		"gulp-concat": "*",
+		"gulp-browserify": "*",
+		"coffeeify": "*",
+		"require-dir": "*",
+		"gulp-connect": "*",
+		"gulp-watch": "*",
+		"gulp-util": "*"
+	}
+}
