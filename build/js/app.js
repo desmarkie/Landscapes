@@ -1,109 +1,68 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
-var App, ColourConversion,
-  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
+var ColourConversion, GridMapColour;
 
 ColourConversion = require('./utils/ColourConversion');
 
-App = (function() {
-  function App() {
-    this.update = bind(this.update, this);
-    this.generateGridColours = bind(this.generateGridColours, this);
+GridMapColour = (function() {
+  function GridMapColour() {
+    this.landscapeColours = [0x3782C9, 0x65C0E5, 0xFFF29C, 0x3FDE4E, 0x24C21D];
+    this.heightBreaks = [0.05, 0.2, 0.5, 0.8];
+    this.blend = true;
+    this.blendDistance = 1;
+    this.addNoise = true;
+    this.gaussian = false;
+    this.gaussianPasses = 1;
+    this.fade = false;
   }
 
-  App.prototype.init = function() {
-    console.log('App Started!');
-    this.defaultTileSize = 64;
-    this.spritePool = [];
-    this.colours = {
-      white: 0xf2f2f2,
-      red: 0xd95964,
-      blue: 0x274073,
-      lightBrown: 0xa6926d,
-      darkBrown: 0x8c5a4f
-    };
-    this.landscapeColours = {
-      0: 0x3782C9,
-      1: 0x65C0E5,
-      2: 0xFFF29C,
-      3: 0x3FDE4E,
-      4: 0x24C21D
-    };
-    this.renderer = PIXI.autoDetectRenderer(window.innerWidth, window.innerHeight);
-    this.renderer.backgroundColor = this.landscapeColours['0'];
-    this.stage = new PIXI.Container();
-    document.body.appendChild(this.renderer.view);
-    this.gridDimensions = {
-      width: 64,
-      height: 64,
-      spacing: 12,
-      centers: 5,
-      centerPad: 16,
-      randomExtraCenters: true,
-      numberOfRandomExtraCenters: 8,
-      fadeValues: true,
-      addNoise: true,
-      gaussian: false,
-      gaussianPasses: 3
-    };
-    this.heightBreaks = [0.15, 0.29, 0.48, 0.67];
-    this.grid = [];
-    this.gridSprites = [];
-    this.gridContainer = new PIXI.Container();
-    this.stage.addChild(this.gridContainer);
-    this.generateGridColours();
-    this.gui = new dat.GUI();
-    this.gridProps = this.gui.addFolder('Grid');
-    this.heights = this.gui.addFolder('Height Breaks');
-    this.gridProps.add(this.gridDimensions, 'width', 8, 64).step(1).onChange((function(_this) {
-      return function() {
-        return _this.gridDimensions.height = _this.gridDimensions.width;
-      };
-    })(this));
-    this.gridProps.add(this.gridDimensions, 'spacing', 2, 32).step(2);
-    this.gridProps.add(this.gridDimensions, 'centers', 1, 99).step(1);
-    this.gridProps.add(this.gridDimensions, 'centerPad', 0, 64).step(1);
-    this.gridProps.add(this.gridDimensions, 'randomExtraCenters');
-    this.gridProps.add(this.gridDimensions, 'numberOfRandomExtraCenters', 1, 16).step(1).name('# extra centers');
-    this.gridProps.add(this.gridDimensions, 'fadeValues');
-    this.gridProps.add(this.gridDimensions, 'addNoise');
-    this.gridProps.add(this.gridDimensions, 'gaussian');
-    this.gridProps.add(this.gridDimensions, 'gaussianPasses', 1, 10).step(1);
-    this.heights.add(this.heightBreaks, '0', 0, 1);
-    this.heights.add(this.heightBreaks, '1', 0, 1);
-    this.heights.add(this.heightBreaks, '2', 0, 1);
-    this.heights.add(this.heightBreaks, '3', 0, 1);
-    this.gui.add(this, 'generateGridColours').name("Generate");
-    return this.update();
-  };
-
-  App.prototype.generateGridColours = function() {
-    var i, j, ref;
-    this.createGrid();
-    this.fillGrid();
-    if (this.gridDimensions.gaussian) {
-      for (i = j = 0, ref = this.gridDimensions.gaussianPasses; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
-        this.smoothValues();
+  GridMapColour.prototype.applyColourToGrid = function(grid) {
+    var col, h, i, j, k, l, ref, ref1, ref2, w, x, y;
+    h = grid.width;
+    w = grid.height;
+    for (y = j = 0, ref = h; 0 <= ref ? j < ref : j > ref; y = 0 <= ref ? ++j : --j) {
+      for (x = k = 0, ref1 = w; 0 <= ref1 ? k < ref1 : k > ref1; x = 0 <= ref1 ? ++k : --k) {
+        if (this.fade) {
+          col = Math.round(255 * grid.grid[y][x].value);
+          grid.grid[y][x].colour = ColourConversion.rgbToHex([col, col, col]);
+        } else {
+          grid.grid[y][x].colour = this.calculateTileColour(grid.grid[y][x].value);
+        }
       }
     }
-    if (this.gridDimensions.fadeValues) {
-      this.fadeHeights();
+    if (this.blend) {
+      this.fadeHeights(grid);
     }
-    if (this.gridDimensions.addNoise) {
-      this.addNoise();
+    if (this.gaussian) {
+      for (i = l = 0, ref2 = this.gaussianPasses; 0 <= ref2 ? l < ref2 : l > ref2; i = 0 <= ref2 ? ++l : --l) {
+        this.smoothValues(grid);
+      }
     }
-    this.updateGridSprites();
-    this.update();
+    if (this.addNoise) {
+      this.addNoiseToColours(grid);
+    }
     return null;
   };
 
-  App.prototype.addNoise = function() {
-    var j, k, ran, ref, ref1, res, src, x, y;
+  GridMapColour.prototype.calculateTileColour = function(tileValue) {
+    var i, j, ref;
+    for (i = j = 0, ref = this.heightBreaks.length; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
+      if (tileValue <= this.heightBreaks[i]) {
+        return this.landscapeColours[i];
+      }
+    }
+    return this.landscapeColours[this.landscapeColours.length - 1];
+  };
+
+  GridMapColour.prototype.addNoiseToColours = function(grid) {
+    var h, j, k, ran, ref, ref1, res, src, w, x, y;
+    h = grid.width;
+    w = grid.height;
     ran = 0;
     src = 0;
     res = 0;
-    for (y = j = 0, ref = this.gridDimensions.height; 0 <= ref ? j < ref : j > ref; y = 0 <= ref ? ++j : --j) {
-      for (x = k = 0, ref1 = this.gridDimensions.width; 0 <= ref1 ? k < ref1 : k > ref1; x = 0 <= ref1 ? ++k : --k) {
-        src = ColourConversion.hexToRgb(this.grid[x][y].colour);
+    for (y = j = 0, ref = h; 0 <= ref ? j < ref : j > ref; y = 0 <= ref ? ++j : --j) {
+      for (x = k = 0, ref1 = w; 0 <= ref1 ? k < ref1 : k > ref1; x = 0 <= ref1 ? ++k : --k) {
+        src = ColourConversion.hexToRgb(grid.grid[y][x].colour);
         ran = Math.round((Math.random() * 255) / 20);
         res = [[src[0] + ran], [src[1] + ran], [src[2] + ran]];
         if (res[0] > 255) {
@@ -115,85 +74,23 @@ App = (function() {
         if (res[2] > 255) {
           res[2] = 255;
         }
-        this.grid[x][y].colour = ColourConversion.rgbToHex(res);
+        grid.grid[y][x].colour = ColourConversion.rgbToHex(res);
       }
     }
     return null;
   };
 
-  App.prototype.createGrid = function() {
-    var j, k, ref, ref1, x, y;
-    this.purgeGrid();
-    for (y = j = 0, ref = this.gridDimensions.height; 0 <= ref ? j < ref : j > ref; y = 0 <= ref ? ++j : --j) {
-      this.grid.push([]);
-      for (x = k = 0, ref1 = this.gridDimensions.width; 0 <= ref1 ? k < ref1 : k > ref1; x = 0 <= ref1 ? ++k : --k) {
-        this.grid[y].push({
-          id: x + '_' + y,
-          x: x,
-          y: y,
-          colour: null
-        });
-        this.gridSprites[x + '_' + y] = this.createGridSprite(x, y);
-      }
-    }
-    this.gridContainer.position.x = (window.innerWidth - this.gridContainer.width) * 0.5;
-    this.gridContainer.position.y = (window.innerHeight - this.gridContainer.height) * 0.5;
-    return null;
-  };
-
-  App.prototype.purgeGrid = function() {
-    var location, ref, sprite;
-    ref = this.gridSprites;
-    for (location in ref) {
-      sprite = ref[location];
-      this.gridContainer.removeChild(sprite);
-      this.spritePool.push(sprite);
-    }
-    this.gridSprites = {};
-    return null;
-  };
-
-  App.prototype.createGridSprite = function(xpos, ypos) {
-    var scale, sp;
-    if (this.spritePool.length > 0) {
-      sp = this.spritePool.splice(0, 1)[0];
-    } else {
-      sp = new PIXI.Graphics();
-      sp.lineStyle(1, this.colours.lightBrown);
-      sp.beginFill(0, 0.1);
-      sp.drawRect(0, 0, this.defaultTileSize, this.defaultTileSize);
-      sp.endFill();
-    }
-    sp.id = xpos + '_' + ypos;
-    sp.position.x = xpos * this.gridDimensions.spacing;
-    sp.position.y = ypos * this.gridDimensions.spacing;
-    scale = this.gridDimensions.spacing / this.defaultTileSize;
-    sp.scale.x = sp.scale.y = scale;
-    this.gridContainer.addChild(sp);
-    return sp;
-  };
-
-  App.prototype.pickRandomCenter = function(minX, minY, maxX, maxY) {
-    var ranX, ranY;
-    ranX = minX + (Math.floor(Math.random() * (maxX - minX)));
-    ranY = minY + (Math.floor(Math.random() * (maxY - minY)));
-    return {
-      x: ranX,
-      y: ranY
-    };
-  };
-
-  App.prototype.getNeighbourAverage = function(x, y) {
-    var b, g, grid, gridArr, j, len, newColour, r;
+  GridMapColour.prototype.getNeighbourAverage = function(x, y, grid) {
+    var b, g, gridArr, j, len, newColour, r;
     gridArr = [];
-    gridArr.push(ColourConversion.hexToRgb(this.grid[x - 1][y - 1].colour));
-    gridArr.push(ColourConversion.hexToRgb(this.grid[x - 1][y].colour));
-    gridArr.push(ColourConversion.hexToRgb(this.grid[x - 1][y + 1].colour));
-    gridArr.push(ColourConversion.hexToRgb(this.grid[x][y - 1].colour));
-    gridArr.push(ColourConversion.hexToRgb(this.grid[x][y + 1].colour));
-    gridArr.push(ColourConversion.hexToRgb(this.grid[x + 1][y - 1].colour));
-    gridArr.push(ColourConversion.hexToRgb(this.grid[x + 1][y].colour));
-    gridArr.push(ColourConversion.hexToRgb(this.grid[x + 1][y + 1].colour));
+    gridArr.push(ColourConversion.hexToRgb(grid.grid[x - 1][y - 1].colour));
+    gridArr.push(ColourConversion.hexToRgb(grid.grid[x - 1][y].colour));
+    gridArr.push(ColourConversion.hexToRgb(grid.grid[x - 1][y + 1].colour));
+    gridArr.push(ColourConversion.hexToRgb(grid.grid[x][y - 1].colour));
+    gridArr.push(ColourConversion.hexToRgb(grid.grid[x][y + 1].colour));
+    gridArr.push(ColourConversion.hexToRgb(grid.grid[x + 1][y - 1].colour));
+    gridArr.push(ColourConversion.hexToRgb(grid.grid[x + 1][y].colour));
+    gridArr.push(ColourConversion.hexToRgb(grid.grid[x + 1][y + 1].colour));
     r = 0;
     g = 0;
     b = 0;
@@ -210,10 +107,10 @@ App = (function() {
     return newColour;
   };
 
-  App.prototype.adjustHeightValue = function(x, y) {
+  GridMapColour.prototype.adjustHeightValue = function(x, y, grid) {
     var gridArr, higherColour, middleColour, sourceColour, sourceRGB, targetRGB;
-    sourceColour = this.grid[x][y].colour;
-    higherColour = this.grid[x][y].colour;
+    sourceColour = grid.grid[x][y].colour;
+    higherColour = grid.grid[x][y].colour;
     if (sourceColour === this.landscapeColours['4']) {
       return this.landscapeColours['4'];
     } else if (sourceColour === this.landscapeColours['3']) {
@@ -226,14 +123,14 @@ App = (function() {
       higherColour = this.landscapeColours['1'];
     }
     gridArr = [];
-    gridArr.push(this.grid[x - 1][y - 1].colour);
-    gridArr.push(this.grid[x - 1][y].colour);
-    gridArr.push(this.grid[x - 1][y + 1].colour);
-    gridArr.push(this.grid[x][y - 1].colour);
-    gridArr.push(this.grid[x][y + 1].colour);
-    gridArr.push(this.grid[x + 1][y - 1].colour);
-    gridArr.push(this.grid[x + 1][y].colour);
-    gridArr.push(this.grid[x + 1][y + 1].colour);
+    gridArr.push(grid.grid[x - 1][y - 1].colour);
+    gridArr.push(grid.grid[x - 1][y].colour);
+    gridArr.push(grid.grid[x - 1][y + 1].colour);
+    gridArr.push(grid.grid[x][y - 1].colour);
+    gridArr.push(grid.grid[x][y + 1].colour);
+    gridArr.push(grid.grid[x + 1][y - 1].colour);
+    gridArr.push(grid.grid[x + 1][y].colour);
+    gridArr.push(grid.grid[x + 1][y + 1].colour);
     if (gridArr.indexOf(higherColour) === -1) {
       return sourceColour;
     }
@@ -246,145 +143,531 @@ App = (function() {
     return ColourConversion.rgbToHex(middleColour);
   };
 
-  App.prototype.fadeHeights = function() {
+  GridMapColour.prototype.fadeHeights = function(grid) {
     var curPoint, j, k, l, m, ref, ref1, ref2, ref3, smoothedColours, x, y;
     curPoint = null;
     smoothedColours = {};
-    for (y = j = 1, ref = this.gridDimensions.height - 1; 1 <= ref ? j < ref : j > ref; y = 1 <= ref ? ++j : --j) {
-      for (x = k = 1, ref1 = this.gridDimensions.width - 1; 1 <= ref1 ? k < ref1 : k > ref1; x = 1 <= ref1 ? ++k : --k) {
-        curPoint = this.grid[x][y];
-        smoothedColours[x + '_' + y] = this.adjustHeightValue(x, y);
+    for (y = j = 1, ref = grid.height - 1; 1 <= ref ? j < ref : j > ref; y = 1 <= ref ? ++j : --j) {
+      for (x = k = 1, ref1 = grid.width - 1; 1 <= ref1 ? k < ref1 : k > ref1; x = 1 <= ref1 ? ++k : --k) {
+        curPoint = grid.grid[x][y];
+        smoothedColours[x + '_' + y] = this.adjustHeightValue(x, y, grid);
       }
     }
-    for (y = l = 1, ref2 = this.gridDimensions.height - 1; 1 <= ref2 ? l < ref2 : l > ref2; y = 1 <= ref2 ? ++l : --l) {
-      for (x = m = 1, ref3 = this.gridDimensions.width - 1; 1 <= ref3 ? m < ref3 : m > ref3; x = 1 <= ref3 ? ++m : --m) {
-        this.grid[x][y].colour = smoothedColours[x + '_' + y];
+    for (y = l = 1, ref2 = grid.height - 1; 1 <= ref2 ? l < ref2 : l > ref2; y = 1 <= ref2 ? ++l : --l) {
+      for (x = m = 1, ref3 = grid.width - 1; 1 <= ref3 ? m < ref3 : m > ref3; x = 1 <= ref3 ? ++m : --m) {
+        grid.grid[x][y].colour = smoothedColours[x + '_' + y];
       }
     }
     return null;
   };
 
-  App.prototype.smoothValues = function() {
+  GridMapColour.prototype.smoothValues = function(grid) {
     var avg, avgColours, curPoint, j, k, l, m, ref, ref1, ref2, ref3, x, y;
     curPoint = null;
     avgColours = {};
-    for (y = j = 1, ref = this.gridDimensions.height - 1; 1 <= ref ? j < ref : j > ref; y = 1 <= ref ? ++j : --j) {
-      for (x = k = 1, ref1 = this.gridDimensions.width - 1; 1 <= ref1 ? k < ref1 : k > ref1; x = 1 <= ref1 ? ++k : --k) {
-        curPoint = this.grid[x][y];
-        avg = this.getNeighbourAverage(x, y);
+    for (y = j = 1, ref = grid.height - 1; 1 <= ref ? j < ref : j > ref; y = 1 <= ref ? ++j : --j) {
+      for (x = k = 1, ref1 = grid.width - 1; 1 <= ref1 ? k < ref1 : k > ref1; x = 1 <= ref1 ? ++k : --k) {
+        curPoint = grid.grid[x][y];
+        avg = this.getNeighbourAverage(x, y, grid);
         avgColours[x + '_' + y] = avg;
       }
     }
-    for (y = l = 1, ref2 = this.gridDimensions.height - 1; 1 <= ref2 ? l < ref2 : l > ref2; y = 1 <= ref2 ? ++l : --l) {
-      for (x = m = 1, ref3 = this.gridDimensions.width - 1; 1 <= ref3 ? m < ref3 : m > ref3; x = 1 <= ref3 ? ++m : --m) {
-        this.grid[x][y].colour = avgColours[x + '_' + y];
+    for (y = l = 1, ref2 = grid.height - 1; 1 <= ref2 ? l < ref2 : l > ref2; y = 1 <= ref2 ? ++l : --l) {
+      for (x = m = 1, ref3 = grid.width - 1; 1 <= ref3 ? m < ref3 : m > ref3; x = 1 <= ref3 ? ++m : --m) {
+        grid.grid[x][y].colour = avgColours[x + '_' + y];
       }
     }
     return null;
   };
 
-  App.prototype.pointIsACenterPoint = function(x, y, points) {
+  return GridMapColour;
+
+})();
+
+module.exports = GridMapColour;
+
+
+},{"./utils/ColourConversion":7}],2:[function(require,module,exports){
+var GridMapGen, Peak;
+
+Peak = require('./Peak');
+
+GridMapGen = (function() {
+  function GridMapGen() {
+    this.grid = [];
+    this.width = 64;
+    this.height = 64;
+    this.centers = [];
+    this.numberOfCenters = 26;
+    this.randomExtraCenters = true;
+    this.numberOfRandomExtraCenters = 16;
+    this.centerPad = 10;
+    this.normalise = true;
+    this.wobble = true;
+    this.wobbleAmount = 0.3;
+    this.wobbleCount = 6;
+  }
+
+  GridMapGen.prototype.getMax = function() {
+    var j, k, max, min, ref, ref1, x, y;
+    min = 1;
+    max = 0;
+    for (y = j = 0, ref = this.height; 0 <= ref ? j < ref : j > ref; y = 0 <= ref ? ++j : --j) {
+      for (x = k = 0, ref1 = this.width; 0 <= ref1 ? k < ref1 : k > ref1; x = 0 <= ref1 ? ++k : --k) {
+        if (this.grid[y][x].value < min) {
+          min = this.grid[y][x].value;
+        }
+        if (this.grid[y][x].value > max) {
+          max = this.grid[y][x].value;
+        }
+      }
+    }
+    return max;
+  };
+
+  GridMapGen.prototype.squareDistanceBetweenTwoPoints = function(ptA, ptB) {
+    var distSq, xDist, yDist;
+    xDist = ptB.position.x - ptA.position.x;
+    yDist = ptB.position.y - ptA.position.y;
+    distSq = (xDist * xDist) + (yDist * yDist);
+    return distSq;
+  };
+
+  GridMapGen.prototype.getMinimumDistanceFromCenters = function(x, y, points) {
+    var distSq, halfWidthSq, j, len, point;
+    distSq = 10000;
+    for (j = 0, len = points.length; j < len; j++) {
+      point = points[j];
+      distSq = Math.min(distSq, this.squareDistanceBetweenTwoPoints({
+        position: {
+          x: x,
+          y: y
+        }
+      }, point));
+    }
+    halfWidthSq = (this.width * 0.5) * (this.width * 0.5);
+    distSq /= halfWidthSq;
+    return distSq;
+  };
+
+  GridMapGen.prototype.getAverageDistanceFromACenter = function(x, y, points) {
+    var distSq, halfWidthSq, j, len, point;
+    distSq = 0;
+    for (j = 0, len = points.length; j < len; j++) {
+      point = points[j];
+      distSq += this.squareDistanceBetweenTwoPoints({
+        position: {
+          x: x,
+          y: y
+        }
+      }, point);
+    }
+    distSq /= points.length;
+    halfWidthSq = (this.width * 0.5) * (this.width * 0.5);
+    distSq /= halfWidthSq;
+    return distSq;
+  };
+
+  GridMapGen.prototype.pickRandomCenter = function(minX, minY, maxX, maxY) {
+    var peak, ranX, ranY;
+    ranX = minX + (Math.floor(Math.random() * (maxX - minX)));
+    ranY = minY + (Math.floor(Math.random() * (maxY - minY)));
+    peak = new Peak();
+    peak.position.x = ranX;
+    peak.position.y = ranY;
+    peak.falloff = 3 + (17 * Math.random());
+    peak.height = 0.5 + Math.random();
+    return peak;
+  };
+
+  GridMapGen.prototype.getHeightFromPeak = function(x, y, peak) {
+    var dist, val, xDif, yDif;
+    val = 0;
+    xDif = peak.position.x - x;
+    yDif = peak.position.y - y;
+    dist = Math.sqrt((xDif * xDif) + (yDif * yDif));
+    if (dist < peak.falloff) {
+      val = peak.height * (1 - (dist / peak.falloff));
+    }
+    return val;
+  };
+
+  GridMapGen.prototype.calculateCombinedHeight = function(x, y, points) {
+    var j, len, point, val;
+    val = 0;
+    for (j = 0, len = points.length; j < len; j++) {
+      point = points[j];
+      val += this.getHeightFromPeak(x, y, point);
+    }
+    if (val < 0) {
+      console.log(x, y);
+    }
+    return val;
+  };
+
+  GridMapGen.prototype.pointIsACenterPoint = function(x, y, points) {
     var j, len, point, val;
     val = false;
     for (j = 0, len = points.length; j < len; j++) {
       point = points[j];
-      if (point.x === x && point.y === y) {
+      if (point.position.x === x && point.position.y === y) {
         val = true;
       }
     }
     return val;
   };
 
-  App.prototype.calculateSquareDistanceFromMapCenter = function(x, y, center) {
-    var distSq, halfWidthSq, xDist, yDist;
-    xDist = center.x - x;
-    yDist = center.y - y;
-    distSq = (xDist * xDist) + (yDist * yDist);
-    halfWidthSq = (this.gridDimensions.width * 0.5) * (this.gridDimensions.width * 0.5);
-    return distSq / halfWidthSq;
+  GridMapGen.prototype.getWobble = function() {
+    var amt, i, j, ref;
+    amt = 0;
+    for (i = j = 0, ref = this.wobbleCount; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
+      amt += Math.random() * this.wobbleAmount;
+    }
+    return amt;
   };
 
-  App.prototype.getMinimumDistanceFromACenter = function(x, y, points) {
-    var dist, j, len, point;
-    dist = 0;
-    for (j = 0, len = points.length; j < len; j++) {
-      point = points[j];
-      dist += this.calculateSquareDistanceFromMapCenter(x, y, point);
+  GridMapGen.prototype.normaliseValues = function(min, max) {
+    var j, k, ref, ref1, x, y;
+    this.max = max;
+    for (y = j = 0, ref = this.height; 0 <= ref ? j < ref : j > ref; y = 0 <= ref ? ++j : --j) {
+      for (x = k = 0, ref1 = this.width; 0 <= ref1 ? k < ref1 : k > ref1; x = 0 <= ref1 ? ++k : --k) {
+        this.grid[y][x].value /= max;
+      }
     }
-    dist /= points.length;
-    return dist;
+    return null;
   };
 
-  App.prototype.fillGrid = function() {
-    var centers, col, colour, distSq, i, j, k, l, m, numCenters, ref, ref1, ref2, val, wobble, x, y;
-    numCenters = this.gridDimensions.centers;
-    if (this.gridDimensions.randomExtraCenters) {
-      numCenters += Math.round(Math.random() * this.gridDimensions.numberOfRandomExtraCenters);
+  GridMapGen.prototype.generateMap = function() {
+    var i, j, k, l, maxValue, minValue, numCenters, ref, ref1, ref2, value, x, y;
+    numCenters = this.numberOfCenters;
+    if (this.randomExtraCenters) {
+      numCenters += Math.round(Math.random() * this.numberOfRandomExtraCenters);
     }
-    centers = [];
+    this.centers = [];
     for (i = j = 0, ref = numCenters; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
-      centers.push(this.pickRandomCenter(this.gridDimensions.centerPad, this.gridDimensions.centerPad, this.gridDimensions.width - this.gridDimensions.centerPad, this.gridDimensions.height - this.gridDimensions.centerPad));
+      this.centers.push(this.pickRandomCenter(this.centerPad, this.centerPad, this.width - this.centerPad, this.height - this.centerPad));
     }
-    colour = null;
-    distSq = 0;
-    for (y = k = 0, ref1 = this.gridDimensions.height; 0 <= ref1 ? k < ref1 : k > ref1; y = 0 <= ref1 ? ++k : --k) {
-      for (x = l = 0, ref2 = this.gridDimensions.width; 0 <= ref2 ? l < ref2 : l > ref2; x = 0 <= ref2 ? ++l : --l) {
-        if (this.pointIsACenterPoint(x, y, centers)) {
-          colour = this.landscapeColours['5'];
-        }
-        if ((x < 1 || x > this.gridDimensions.width - 2) || (y < 1 || y > this.gridDimensions.height - 2)) {
-          colour = this.landscapeColours['0'];
+    this.grid = [];
+    value = 0;
+    minValue = 1;
+    maxValue = 0;
+    for (y = k = 0, ref1 = this.height; 0 <= ref1 ? k < ref1 : k > ref1; y = 0 <= ref1 ? ++k : --k) {
+      this.grid[y] = [];
+      for (x = l = 0, ref2 = this.width; 0 <= ref2 ? l < ref2 : l > ref2; x = 0 <= ref2 ? ++l : --l) {
+        if ((x < 1 || x > this.width - 2) || (y < 1 || y > this.height - 2)) {
+          value = 0;
         } else {
-          distSq = this.getMinimumDistanceFromACenter(x, y, centers);
-          if (distSq > 1) {
-            distSq = 1;
-          }
-          if (distSq < 0) {
-            distSq = 0;
-          }
-          distSq = Math.abs(Math.log(distSq) / 7);
-          for (i = m = 0; m < 3; i = ++m) {
-            wobble = Math.random() * 0.05;
-            distSq -= wobble;
-          }
-          val = distSq;
-          if (val <= this.heightBreaks[0]) {
-            col = this.landscapeColours['0'];
-          } else if (val > this.heightBreaks[0] && val <= this.heightBreaks[1]) {
-            col = this.landscapeColours['1'];
-          } else if (val > this.heightBreaks[1] && val <= this.heightBreaks[2]) {
-            col = this.landscapeColours['2'];
-          } else if (val > this.heightBreaks[2] && val <= this.heightBreaks[3]) {
-            col = this.landscapeColours['3'];
-          } else if (val > this.heightBreaks[3]) {
-            col = this.landscapeColours['4'];
-          }
-          colour = col;
+          value = this.calculateCombinedHeight(x, y, this.centers);
         }
-        this.grid[y][x].colour = colour;
+        if (this.wobble) {
+          value -= this.getWobble();
+        }
+        if (value < minValue) {
+          minValue = value;
+        }
+        if (value > maxValue) {
+          maxValue = value;
+        }
+        this.grid[y][x] = {
+          id: x + '_' + y,
+          x: x,
+          y: y,
+          value: value
+        };
       }
+    }
+    if (this.normalise) {
+      this.normaliseValues(minValue, maxValue);
+    }
+
+    /*
+    		value = null
+    		distSq = 0
+    		@grid = []
+    
+    		for y in [0...@height]
+    			@grid[y] = []
+    			for x in [0...@width]
+    				#center point is the highest point
+    				if @pointIsACenterPoint x, y, centers
+    					value = 1 #@landscapeColours['5']
+    				#edge is always lowest possible value
+    				else if ( x < 1 or x > @width-2 ) or ( y < 1 or y > @height-2 )
+    					value = 0 #@landscapeColours['0']
+    				#get the ratio between 0 and 5 for land colour
+    				else
+    					#straight distance = smooth circle
+    					distSq = @getMinimumDistanceFromCenters x, y, centers
+    					if distSq > 1 then distSq = 1
+    					if distSq < 0 then distSq = 0
+    
+    					distSq = Math.abs(Math.log(distSq) / 7)
+    
+    					if @wobble then distSq -= @getWobble()
+    
+    					value = distSq
+    
+    				@grid[y][x] = {id:x+'_'+y, x:x, y:y, value:value}
+     */
+    return null;
+  };
+
+  return GridMapGen;
+
+})();
+
+module.exports = GridMapGen;
+
+
+},{"./Peak":4}],3:[function(require,module,exports){
+var GridSprites,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+GridSprites = (function(superClass) {
+  extend(GridSprites, superClass);
+
+  function GridSprites() {
+    GridSprites.__super__.constructor.call(this);
+    this.pool = [];
+    this.sprites = {};
+    this.defaultTileSize = 64;
+    this.tileSize = 12;
+    this.border = false;
+    this.debugClick = (function(_this) {
+      return function(e) {
+        return console.log('no debug');
+      };
+    })(this);
+  }
+
+  GridSprites.prototype.createGrid = function(gridData) {
+    var h, i, j, ref, ref1, sp, w, x, y;
+    this.clearCurrentGrid();
+    w = gridData.width;
+    h = gridData.height;
+    this.sprites = {};
+    for (y = i = 0, ref = h; 0 <= ref ? i < ref : i > ref; y = 0 <= ref ? ++i : --i) {
+      for (x = j = 0, ref1 = w; 0 <= ref1 ? j < ref1 : j > ref1; x = 0 <= ref1 ? ++j : --j) {
+        sp = this.sprites[x + '_' + y] = this.getTileSprite(x, y, gridData.data[y][x].colour);
+        this.addChild(sp);
+      }
+    }
+    this.position.x = (window.innerWidth - this.width) * 0.5;
+    this.position.y = (window.innerHeight - this.height) * 0.5;
+    return null;
+  };
+
+  GridSprites.prototype.clearCurrentGrid = function() {
+    var sp;
+    while (this.children.length > 0) {
+      sp = this.getChildAt(0);
+      this.removeChild(sp);
+      this.pool.push(sp);
     }
     return null;
   };
 
-  App.prototype.updateGridSprites = function() {
-    var j, k, ref, ref1, sp, sprite, x, y;
-    for (sprite in this.gridSprites) {
-      this.gridSprites[sprite].clear();
+  GridSprites.prototype.getTileSprite = function(xpos, ypos, colour) {
+    var scale, sp;
+    if (this.pool.length > 0) {
+      sp = this.pool.splice(0, 1)[0];
+    } else {
+      sp = new PIXI.Graphics();
+      sp.interactive = true;
+      sp.on('mouseup', this.debugClick);
     }
-    for (y = j = 0, ref = this.gridDimensions.height; 0 <= ref ? j < ref : j > ref; y = 0 <= ref ? ++j : --j) {
-      for (x = k = 0, ref1 = this.gridDimensions.width; 0 <= ref1 ? k < ref1 : k > ref1; x = 0 <= ref1 ? ++k : --k) {
-        sp = this.gridSprites[x + '_' + y];
-        sp.beginFill(this.grid[y][x].colour, 1);
-        sp.drawRect(0, 0, this.defaultTileSize, this.defaultTileSize);
-        sp.endFill();
+    sp.clear();
+    if (this.border) {
+      sp.lineStyle(3, 0xFFFFFF, 0.3);
+    }
+    sp.beginFill(colour);
+    sp.drawRect(0, 0, this.defaultTileSize, this.defaultTileSize);
+    sp.endFill();
+    sp.id = xpos + '_' + ypos;
+    sp.position.x = xpos * this.tileSize;
+    sp.position.y = ypos * this.tileSize;
+    scale = this.tileSize / this.defaultTileSize;
+    sp.scale.x = sp.scale.y = scale;
+    return sp;
+  };
+
+  return GridSprites;
+
+})(PIXI.Container);
+
+module.exports = GridSprites;
+
+
+},{}],4:[function(require,module,exports){
+var Peak;
+
+Peak = (function() {
+  function Peak() {
+    this.position = {
+      x: 0,
+      y: 0
+    };
+    this.falloff = 1;
+    this.height = 1;
+  }
+
+  return Peak;
+
+})();
+
+module.exports = Peak;
+
+
+},{}],5:[function(require,module,exports){
+var App, GridMapColour, GridMapGen, GridSprites,
+  bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
+
+GridSprites = require('./GridSprites');
+
+GridMapGen = require('./GridMapGen');
+
+GridMapColour = require('./GridMapColour');
+
+App = (function() {
+  function App() {
+    this.update = bind(this.update, this);
+    this.generateGridColours = bind(this.generateGridColours, this);
+    this.generateGrid = bind(this.generateGrid, this);
+  }
+
+  App.prototype.init = function() {
+    console.log('App Started!');
+    this.colours = {
+      white: 0xf2f2f2,
+      red: 0xd95964,
+      blue: 0x274073,
+      lightBrown: 0xa6926d,
+      darkBrown: 0x8c5a4f
+    };
+    this.lotsCount = 3;
+    this.grid = new GridMapGen();
+    this.mapColour = new GridMapColour();
+    this.renderer = PIXI.autoDetectRenderer(window.innerWidth, window.innerHeight);
+    this.renderer.backgroundColor = this.mapColour.landscapeColours['0'];
+    this.stage = new PIXI.Container();
+    document.body.appendChild(this.renderer.view);
+    this.gridSprites = new GridSprites();
+    this.stage.addChild(this.gridSprites);
+    this.gridSprites.debugClick = (function(_this) {
+      return function(e) {
+        var comH, maxH, norH, x, y;
+        x = Math.floor(e.target.position.x / _this.gridSprites.tileSize);
+        y = Math.floor(e.target.position.y / _this.gridSprites.tileSize);
+        comH = _this.grid.calculateCombinedHeight(x, y, _this.grid.centers);
+        maxH = _this.grid.max;
+        norH = comH / maxH;
+        console.log(x, y);
+        console.log('combined height', comH);
+        console.log('normalisedHeight', norH);
+        return console.log('max height', maxH);
+      };
+    })(this);
+    this.generateGrid();
+    this.gui = new dat.GUI();
+    this.gridProps = this.gui.addFolder('Map');
+    this.gui.add(this, 'generateGrid').name("Generate");
+    this.heights = this.gui.addFolder('Height Breaks');
+    this.colours = this.gui.addFolder('Colours');
+    this.extras = this.gui.addFolder('Extras');
+    this.gridProps.add(this.grid, 'width', 8, 128).step(1).name('Grid Size').onChange((function(_this) {
+      return function() {
+        return _this.grid.height = _this.grid.width;
+      };
+    })(this));
+    this.gridProps.add(this.gridSprites, 'tileSize', 2, 32).step(2).name('Tile Size');
+    this.gridProps.add(this.grid, 'centerPad', 0, 64).step(1);
+    this.gridProps.add(this.grid, 'numberOfCenters', 1, 99).step(1);
+    this.gridProps.add(this.grid, 'randomExtraCenters');
+    this.gridProps.add(this.grid, 'numberOfRandomExtraCenters', 1, 16).step(1).name('# extra centers');
+    this.gridProps.add(this.grid, 'normalise').name('normalise values');
+    this.gridProps.add(this.grid, 'wobble').name('distance noise');
+    this.gridProps.add(this.grid, 'wobbleAmount', 0.05, 0.5).step(0.01).name('Wobble Amount');
+    this.gridProps.add(this.grid, 'wobbleCount', 1, 20).step(1).name('Wobble Count');
+    this.extras.add(this.mapColour, 'blend').onChange(this.generateGridColours);
+    this.extras.add(this.mapColour, 'gaussian').onChange(this.generateGridColours);
+    this.extras.add(this.mapColour, 'gaussianPasses', 1, 10).step(1).onChange(this.generateGridColours);
+    this.extras.add(this.mapColour, 'addNoise').onChange(this.generateGridColours);
+    this.extras.add(this.gridSprites, 'border').onChange(this.generateGridColours);
+    this.extras.add(this.mapColour, 'fade').onChange(this.generateGridColours);
+    this.moreStuff = this.extras.addFolder('more');
+    this.moreStuff.add(this, 'lotsCount', 2, 50);
+    this.moreStuff.add(this, 'drawLots');
+    this.colours.addColor(this.mapColour.landscapeColours, '0').onChange((function(_this) {
+      return function() {
+        _this.renderer.backgroundColor = _this.mapColour.landscapeColours['0'];
+        return _this.generateGridColours();
+      };
+    })(this));
+    this.colours.addColor(this.mapColour.landscapeColours, '1').onChange(this.generateGridColours);
+    this.colours.addColor(this.mapColour.landscapeColours, '2').onChange(this.generateGridColours);
+    this.colours.addColor(this.mapColour.landscapeColours, '3').onChange(this.generateGridColours);
+    this.colours.addColor(this.mapColour.landscapeColours, '4').onChange(this.generateGridColours);
+    this.heights.add(this.mapColour.heightBreaks, '0', 0, 1).onChange(this.generateGridColours);
+    this.heights.add(this.mapColour.heightBreaks, '1', 0, 1).onChange(this.generateGridColours);
+    this.heights.add(this.mapColour.heightBreaks, '2', 0, 1).onChange(this.generateGridColours);
+    return this.heights.add(this.mapColour.heightBreaks, '3', 0, 1).onChange(this.generateGridColours);
+  };
+
+  App.prototype.generateGrid = function() {
+    this.grid.generateMap();
+    this.generateGridColours();
+    return null;
+  };
+
+  App.prototype.drawLots = function() {
+    var amt, count, i, j, lscale, ref, scale, sp, tex, totalHeight, x, y;
+    this.gridSprites.alpha = 0;
+    this.lots = new PIXI.Container();
+    this.stage.addChild(this.lots);
+    count = this.lotsCount * this.lotsCount;
+    x = 0;
+    y = 0;
+    amt = 64 * 12;
+    scale = 0.2;
+    totalHeight = (amt * this.lotsCount) * scale;
+    lscale = window.innerHeight / totalHeight;
+    if (lscale > 1) {
+      lscale = 1;
+    }
+    this.lots.scale.x = this.lots.scale.y = lscale;
+    this.lots.position.x = (window.innerWidth - (totalHeight * lscale)) * 0.5;
+    this.lots.position.y = (window.innerHeight - (totalHeight * lscale)) * 0.5;
+    for (i = j = 0, ref = count; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
+      console.log('generating....', i);
+      this.generateGrid();
+      tex = new PIXI.RenderTexture(this.renderer, amt, amt);
+      tex.render(this.gridSprites);
+      sp = new PIXI.Sprite(tex);
+      sp.scale.x = sp.scale.y = scale;
+      sp.x = (amt * scale) * x;
+      sp.y = (amt * scale) * y;
+      x++;
+      if (x === this.lotsCount) {
+        console.log('bump');
+        x = 0;
+        y++;
       }
+      this.lots.addChild(sp);
+      this.renderer.render(this.stage);
     }
     return null;
   };
 
-  App.prototype.handleGifCreated = function(url) {
-    return console.log(url);
+  App.prototype.generateGridColours = function() {
+    this.mapColour.applyColourToGrid(this.grid);
+    this.gridSprites.createGrid({
+      width: this.grid.width,
+      height: this.grid.height,
+      data: this.grid.grid
+    });
+    this.update();
+    return null;
   };
 
   App.prototype.update = function() {
@@ -399,7 +682,7 @@ App = (function() {
 module.exports = App;
 
 
-},{"./utils/ColourConversion":3}],2:[function(require,module,exports){
+},{"./GridMapColour":1,"./GridMapGen":2,"./GridSprites":3}],6:[function(require,module,exports){
 var App;
 
 App = require('./app');
@@ -409,7 +692,7 @@ window.app = new App();
 window.app.init();
 
 
-},{"./app":1}],3:[function(require,module,exports){
+},{"./app":5}],7:[function(require,module,exports){
 
 /*
 Colour conversion utils
@@ -530,4 +813,4 @@ ColourConversion = (function() {
 module.exports = ColourConversion;
 
 
-},{}]},{},[2])
+},{}]},{},[6])
